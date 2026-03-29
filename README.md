@@ -1,7 +1,6 @@
-# 🔬 BEVD210L — Quantum Technology for Electronics Engineers
+# QHack Levels 1-5
 
-> **Quantum Computing Lab Report | Levels 1–5**
-> **Author:** Hariharan Nagarajan · `23BVD1005`
+> **Author:** Hariharan Nagarajan
 > **Platform:** Qiskit / Qiskit Aer / QuTiP
 > **Tools:** Python 3.11 · Jupyter Notebook
 
