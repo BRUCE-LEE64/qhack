@@ -1,1 +1,108 @@
+"""
+Level 1 — Quantum 4-Bit Ripple Carry Adder
+BEVD210L: Quantum Technology for Electronics Engineers
+Author: Hariharan Nagarajan (23BVD1005)
+
+Implements a 4-bit quantum ripple carry adder using the Cuccaro MAJ/UMA gate pattern.
+Tested on Qiskit Aer QASM simulator with 1024 shots per test case.
+"""
+
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
+from qiskit_aer import AerSimulator
+
+# ─── Gate Definitions ────────────────────────────────────────────────────────
+
+def maj(qc, c, b, a):
+    """MAJ (Majority) gate: |c,b,a⟩ → |c⊕a, b⊕a, MAJ(c,b,a)⟩"""
+    qc.cx(a, b)
+    qc.cx(a, c)
+    qc.ccx(c, b, a)
+
+def uma(qc, c, b, a):
+    """UMA (Un-Majority and Add) gate: inverse of MAJ, extracts sum into b."""
+    qc.ccx(c, b, a)
+    qc.cx(a, c)
+    qc.cx(c, b)
+
+# ─── Adder Circuit ────────────────────────────────────────────────────────────
+
+def build_adder(a_bits, b_bits):
+    """
+    Build a 4-bit quantum ripple carry adder for given input bit lists.
+    a_bits, b_bits: list of 4 ints (0 or 1), LSB first.
+    Returns a QuantumCircuit with 13 qubits and 5 classical bits.
+    """
+    a = QuantumRegister(4, 'a')
+    b = QuantumRegister(4, 'b')
+    c = QuantumRegister(4, 'c')   # carry ancilla
+    overflow = QuantumRegister(1, 'overflow')
+    meas = ClassicalRegister(5, 'meas')
+
+    qc = QuantumCircuit(a, b, c, overflow, meas)
+
+    # Initialise input qubits
+    for i, bit in enumerate(a_bits):
+        if bit:
+            qc.x(a[i])
+    for i, bit in enumerate(b_bits):
+        if bit:
+            qc.x(b[i])
+
+    qc.barrier()
+
+    # Forward pass: MAJ chain
+    maj(qc, c[0], b[0], a[0])
+    maj(qc, a[0], b[1], a[1])
+    maj(qc, a[1], b[2], a[2])
+    maj(qc, a[2], b[3], a[3])
+
+    # Carry-out to overflow qubit
+    qc.cx(a[3], overflow[0])
+
+    # Reverse pass: UMA chain
+    uma(qc, a[2], b[3], a[3])
+    uma(qc, a[1], b[2], a[2])
+    uma(qc, a[0], b[1], a[1])
+    uma(qc, c[0], b[0], a[0])
+
+    qc.barrier()
+
+    # Measure sum bits and carry-out
+    qc.measure(b[0], meas[0])
+    qc.measure(b[1], meas[1])
+    qc.measure(b[2], meas[2])
+    qc.measure(b[3], meas[3])
+    qc.measure(overflow[0], meas[4])
+
+    return qc
+
+# ─── Test Cases ───────────────────────────────────────────────────────────────
+
+TEST_CASES = [
+    ([1,0,0,0], [1,0,0,0], 2,  "1+1=2"),
+    ([1,0,1,0], [1,1,0,0], 8,  "5+3=8"),
+    ([1,1,1,1], [1,0,0,0], 16, "15+1=16"),
+    ([0,1,1,0], [1,0,0,1], 15, "6+9=15"),
+]
+
+def decode_result(bitstring):
+    """Decode Qiskit's reversed bitstring to an integer result."""
+    bits = bitstring[::-1]  # Qiskit outputs LSB on the right
+    return int(bits, 2)
+
+def run_tests():
+    sim = AerSimulator()
+    print(f"{'Test Case':<12} {'Expected':>10} {'Got':>6} {'Pass?':>6}")
+    print("-" * 38)
+    for a_bits, b_bits, expected, label in TEST_CASES:
+        qc = build_adder(a_bits, b_bits)
+        job = sim.run(qc, shots=1024)
+        counts = job.result().get_counts()
+        top = max(counts, key=counts.get)
+        result = decode_result(top)
+        passed = "✓" if result == expected else "✗"
+        print(f"{label:<12} {expected:>10} {result:>6} {passed:>6}")
+
+if __name__ == "__main__":
+    run_tests()
 
