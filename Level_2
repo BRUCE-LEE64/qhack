@@ -1,0 +1,98 @@
+"""
+Level 2 — Quantum Priority Encoder / Emergency Signal Selector
+BEVD210L: Quantum Technology for Electronics Engineers
+Author: Hariharan Nagarajan (23BVD1005)
+
+Priority order: M (Medical) > F (Fire) > G (Gas) > I (Intrusion)
+Uses X, CX, and CCX (Toffoli) gates to implement reversible priority logic.
+"""
+
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
+from qiskit_aer import AerSimulator
+
+SHOTS = 1000
+
+def build_priority_encoder(m, f, g, i):
+    """
+    Build quantum priority encoder circuit.
+    m, f, g, i: int (0 or 1) — input signal bits.
+    Returns QuantumCircuit with 9 qubits, 1 classical bit.
+    """
+    inputs   = QuantumRegister(4, 'inp')   # q0=M, q1=F, q2=G, q3=I
+    ancilla  = QuantumRegister(4, 'anc')   # t1–t4
+    out      = QuantumRegister(1, 'out')
+    meas     = ClassicalRegister(1, 'c')
+
+    qc = QuantumCircuit(inputs, ancilla, out, meas)
+
+    # Initialise inputs
+    for idx, bit in enumerate([m, f, g, i]):
+        if bit:
+            qc.x(inputs[idx])
+
+    qc.barrier()
+
+    # ── Condition 1: M (Priority 1) ──────────────────────────────────────────
+    qc.cx(inputs[0], out[0])
+    qc.barrier()
+
+    # ── Condition 2: ¬M · F (Priority 2) ────────────────────────────────────
+    qc.x(inputs[0])
+    qc.ccx(inputs[1], inputs[0], ancilla[0])
+    qc.cx(ancilla[0], out[0])
+    qc.x(inputs[0])
+    qc.barrier()
+
+    # ── Condition 3: ¬M · ¬F · G (Priority 3) ───────────────────────────────
+    qc.x(inputs[0])
+    qc.x(inputs[1])
+    qc.ccx(inputs[2], inputs[0], ancilla[1])
+    qc.ccx(ancilla[1], inputs[1], ancilla[2])
+    qc.cx(ancilla[2], out[0])
+    qc.x(inputs[1])
+    qc.x(inputs[0])
+    qc.barrier()
+
+    # ── Condition 4: ¬M · ¬F · ¬G · I (Priority 4) ──────────────────────────
+    qc.x(inputs[0])
+    qc.x(inputs[1])
+    qc.x(inputs[2])
+    qc.ccx(inputs[3], inputs[0], ancilla[1])
+    qc.ccx(ancilla[1], inputs[1], ancilla[2])
+    qc.ccx(ancilla[2], inputs[2], ancilla[3])
+    qc.cx(ancilla[3], out[0])
+    qc.x(inputs[2])
+    qc.x(inputs[1])
+    qc.x(inputs[0])
+    qc.barrier()
+
+    qc.measure(out[0], meas[0])
+    return qc
+
+# ─── Test Cases ───────────────────────────────────────────────────────────────
+
+TEST_CASES = [
+    (0,0,0,0, 0, "No Emergency"),
+    (1,0,0,0, 1, "Medical (P1)"),
+    (0,1,0,0, 1, "Fire (P2)"),
+    (0,0,1,0, 1, "Gas (P3)"),
+    (0,0,0,1, 1, "Intrusion (P4)"),
+    (1,1,0,0, 1, "M+F → Medical (P1)"),
+    (0,1,1,0, 1, "F+G → Fire (P2)"),
+    (1,1,1,1, 1, "All → Medical (P1)"),
+]
+
+def run_tests():
+    sim = AerSimulator()
+    print(f"{'Inputs (M,F,G,I)':<20} {'Expected':>10} {'Got':>5} {'Pass?':>6}  Signal")
+    print("-" * 58)
+    for m, f, g, i, expected, label in TEST_CASES:
+        qc = build_priority_encoder(m, f, g, i)
+        counts = sim.run(qc, shots=SHOTS).result().get_counts()
+        top = max(counts, key=counts.get)
+        result = int(top)
+        passed = "✓" if result == expected else "✗"
+        print(f"({m},{f},{g},{i}){'':<15} {expected:>10} {result:>5} {passed:>6}  {label}")
+
+if __name__ == "__main__":
+    run_tests()
